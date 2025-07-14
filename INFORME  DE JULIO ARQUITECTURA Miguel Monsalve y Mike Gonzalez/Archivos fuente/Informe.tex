@@ -1,0 +1,337 @@
+\documentclass{article}
+\usepackage[spanish]{babel}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage[utf8]{inputenc}
+\usepackage{xcolor}
+\usepackage{array}
+
+\title{Informe de Laboratorio 2: Arquitectura MIPS32}
+\author{Mike Gonzalez y Miguel Monsalves}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Respuestas a las Preguntas}
+
+\subsection*{1. Diferencias entre registros temporales (\$t0–\$t9) y registros guardados (\$s0–\$s7)}
+\begin{itemize}
+  \item \textbf{Registros Temporales (\$t0–\$t9)}
+  \begin{itemize}
+    \item \textit{No preservados (Caller-saved)}: Modificables por subrutinas sin restauración
+    \item \textit{Responsabilidad del Caller}: Guardar valores antes de llamadas si son necesarios posteriormente
+    \item \textit{Uso}: Valores temporales dentro de una función
+  \end{itemize}
+  
+  \item \textbf{Registros Guardados (\$s0–\$s7)}
+  \begin{itemize}
+    \item \textit{Preservados (Callee-saved)}: Subrutinas deben restaurar valores originales
+    \item \textit{Responsabilidad del Callee}: Guardar/restaurar al inicio/fin de ejecución
+    \item \textit{Uso}: Variables persistentes entre llamadas a funciones
+  \end{itemize}
+  
+  \item \textbf{Aplicación práctica}: 
+  \begin{itemize}
+    \item \texttt{\$tX} para índices temporales en bucles
+    \item \texttt{\$sX} para punteros a arreglos y variables críticas
+  \end{itemize}
+\end{itemize}
+
+\subsection*{2. Diferencias entre \$a0–\$a3, \$v0–\$v1, \$ra}
+\begin{itemize}
+  \item \textbf{Registros de Argumentos (\$a0–\$a3)}:
+  \begin{itemize}
+    \item Paso de parámetros a subrutinas
+    \item Caller-saved
+  \end{itemize}
+  
+  \item \textbf{Registros de Retorno (\$v0–\$v1)}:
+  \begin{itemize}
+    \item Devolución de resultados
+    \item Caller-saved
+  \end{itemize}
+  
+  \item \textbf{Registro \$ra}:
+  \begin{itemize}
+    \item Almacena dirección de retorno
+    \item Callee-saved (excepto funciones hoja)
+    \item Crítico para gestión de llamadas anidadas
+  \end{itemize}
+\end{itemize}
+
+\subsection*{3. Uso de registros vs memoria en rendimiento}
+\begin{itemize}
+  \item \textbf{Jerarquía de memoria}:
+  \begin{center}
+    \begin{tabular}{c|c|c}
+      \textbf{Nivel} & \textbf{Acceso} & \textbf{Tamaño} \\
+      \hline
+      Registros & 1 ciclo & 32 B \\
+      Caché L1 & 3-5 ciclos & 32 KB \\
+      RAM & 100+ ciclos & GBs \\
+    \end{tabular}
+  \end{center}
+  
+  \item \textbf{Impacto en algoritmos}:
+  \begin{itemize}
+    \item Operaciones en registros $\rightarrow$ máximos 1 ciclo
+    \item Accesos a memoria $\rightarrow$ penalización por latencia
+    \item \textit{Bubble Sort}: O($n^2$) accesos memoria (ineficiente)
+    \item \textit{Selection Sort}: Minimiza escrituras (solo O($n$))
+  \end{itemize}
+\end{itemize}
+
+\subsection*{4. Impacto de estructuras de control}
+\begin{itemize}
+  \item \textbf{Penalizaciones por saltos}:
+  \begin{equation*}
+    \text{Tiempo}_{\text{ejecución}} = \text{Ciclos} \times \text{CPI} + \text{Penalización}_{\text{saltos}}
+  \end{equation*}
+  
+  \item \textbf{Burbujas en pipeline}:
+  \textbf{Ejemplo con instrucción de salto (beq)}:
+  \begin{center}
+    \begin{tabular}{|c|c|c|c|c|c|}
+      \hline
+      \textbf{Ciclo} & \textbf{IF} & \textbf{ID} & \textbf{EX} & \textbf{MEM} & \textbf{WB} \\
+      \hline
+      1 & beq & - & - & - & - \\
+      \hline
+      2 & instr2 & beq & - & - & - \\
+      \hline
+      3 & instr3 & instr2 & beq & - & - \\
+      \hline
+      4 & \textcolor{red}{burbuja} & instr3 & instr2 & beq & - \\
+      \hline
+      5 & destino & \textcolor{red}{burbuja} & instr3 & instr2 & beq \\
+      \hline
+    \end{tabular}
+  \end{center}
+  Cada burbuja introduce 1 ciclo de retraso (stall) en el pipeline
+  
+  \item \textbf{Optimizaciones}:
+  \begin{itemize}
+    \item Reducción de saltos redundantes
+    \item Desenrollado de bucles (loop unrolling)
+    \item Uso de predicción estática de saltos
+  \end{itemize}
+\end{itemize}
+
+\subsection*{5. Complejidad computacional: Bubble Sort vs Selection Sort}
+\begin{center}
+  \begin{tabular}{l|c|c|c}
+    \textbf{Algoritmo} & \textbf{Mejor Caso} & \textbf{Peor Caso} & \textbf{Intercambios} \\
+    \hline
+    Bubble Sort & O($n$) & O($n^2$) & O($n^2$) \\
+    Selection Sort & O($n^2$) & O($n^2$) & O($n$) \\
+  \end{tabular}
+\end{center}
+
+\textbf{Implicaciones MIPS32}:
+\begin{itemize}
+  \item Selection Sort $\rightarrow$ menos accesos memoria (óptimo)
+  \item Bubble Sort $\rightarrow$ ventaja en datos casi ordenados
+\end{itemize}
+
+\subsection*{6. Ciclo de ejecución MIPS32}
+\begin{enumerate}
+  \item \textbf{IF (Instruction Fetch)}: 
+  \begin{itemize}
+    \item Fetch desde memoria de instrucciones
+    \item PC $\leftarrow$ PC + 4
+  \end{itemize}
+  
+  \item \textbf{ID (Instruction Decode)}: 
+  \begin{itemize}
+    \item Decodificación de opcode
+    \item Lectura de registros
+    \item Extensión de signo
+  \end{itemize}
+  
+  \item \textbf{EX (Execute)}: 
+  \begin{itemize}
+    \item Operaciones ALU
+    \item Cálculo de direcciones
+  \end{itemize}
+  
+  \item \textbf{MEM (Memory Access)}: 
+  \begin{itemize}
+    \item Acceso a memoria de datos
+  \end{itemize}
+  
+  \item \textbf{WB (Write Back)}: 
+  \begin{itemize}
+    \item Escritura en banco de registros
+  \end{itemize}
+\end{enumerate}
+
+\subsection*{7. Tipos de instrucciones predominantes}
+\begin{center}
+  \begin{tabular}{l|l|l}
+    \textbf{Tipo} & \textbf{Ejemplos} & \textbf{Uso} \\
+    \hline
+    I & \texttt{lw}, \texttt{sw}, \texttt{addi}, \texttt{beq} & 65\% \\
+    R & \texttt{add}, \texttt{sub}, \texttt{slt} & 30\% \\
+    J & \texttt{j}, \texttt{jal} & 5\% \\
+  \end{tabular}
+\end{center}
+
+\textbf{Justificación}: Alta frecuencia de accesos a memoria (I) y operaciones aritméticas (R)
+
+\section*{Investigación: Preguntas 8-15}
+
+\subsection*{8. Abuso de instrucciones de salto}
+\begin{itemize}
+  \item \textbf{Problema}: 
+  \begin{itemize}
+    \item Burbujas en pipeline (3-5 ciclos perdidos por salto)
+    \item Ejemplo en Bubble Sort base:
+    \begin{verbatim}
+      bgt $t3, $t4, swap   # Salto condicional
+      j no_swap            # Salto redundante (flujo natural)
+    \end{verbatim}
+  \end{itemize}
+  
+  \item \textbf{Solución}: 
+  \begin{itemize}
+    \item Uso de contador lineal (\texttt{\$t5}) en Bubble Sort optimizado
+    \item Reducción de 450 a 383 ciclos (15\% menos)
+  \end{itemize}
+\end{itemize}
+
+\subsection*{9. Ventajas modelo RISC/MIPS}
+\begin{itemize}
+  \item \textbf{RISC}: Instrucciones simples + ejecución single-cycle
+  \item \textbf{CISC}: Instrucciones complejas + multi-ciclo
+  \item \textbf{Ventajas}:
+  \begin{itemize}
+    \item Swap en 3 instrucciones: \texttt{lw} $\rightarrow$ \texttt{add} $\rightarrow$ \texttt{sw}
+    \item Pipeline predecible (sin microcódigo)
+  \end{itemize}
+\end{itemize}
+
+\subsection*{10. Uso modo paso a paso en MARS}
+\begin{itemize}
+  \item \textbf{Step Into}: Verificación elemento máximo en Bubble Sort
+  \item \textbf{Error detectado}: Offset mal calculado en \texttt{lw}
+  \begin{verbatim}
+    lw $t3, 8($a0)   # Error: debería ser 4($a0)
+  \end{verbatim}
+\end{itemize}
+
+\subsection*{11. Herramientas de depuración MARS}
+\begin{itemize}
+  \item \textbf{Data Segment}: Detectó que \texttt{\$a0} se sobrescribía
+  \item \textbf{Solución}: Preservar \texttt{\$a0} en pila
+  \begin{verbatim}
+    addi $sp, $sp, -4
+    sw $a0, 0($sp)
+    # ... llamada a función
+    lw $a0, 0($sp)
+    addi $sp, $sp, 4
+  \end{verbatim}
+\end{itemize}
+
+\subsection*{12. Camino de datos instrucción tipo R (add)}
+\textbf{Etapas para \texttt{add \$t0, \$t1, \$t2}}:
+\begin{enumerate}
+  \item \textbf{IF}: Carga la instrucción desde memoria
+  \item \textbf{ID}: 
+  \begin{itemize}
+    \item Decodifica instrucción (opcode = 000000)
+    \item Lee registros \$t1 y \$t2
+    \item Identifica función ALU (add = 100000)
+  \end{itemize}
+  \item \textbf{EX}: ALU realiza suma (\$t1 + \$t2)
+  \item \textbf{MEM}: Sin acceso a memoria
+  \item \textbf{WB}: Escribe resultado en \$t0
+\end{enumerate}
+
+\textbf{Recursos utilizados}:
+\begin{center}
+  \begin{tabular}{l|l}
+    \textbf{Etapa} & \textbf{Componentes} \\
+    \hline
+    IF & Memoria Instrucciones, PC \\
+    ID & Banco de Registros, Unidad Control \\
+    EX & ALU \\
+    MEM & - \\
+    WB & Banco de Registros \\
+  \end{tabular}
+\end{center}
+
+\subsection*{13. Camino de datos instrucción tipo I (lw)}
+\textbf{Etapas para \texttt{lw \$t0, 4(\$a0)}}:
+\begin{enumerate}
+  \item \textbf{IF}: Carga la instrucción desde memoria
+  \item \textbf{ID}: 
+  \begin{itemize}
+    \item Decodifica instrucción (opcode = 100011)
+    \item Lee registro \$a0
+    \item Extiende signo del inmediato (4)
+  \end{itemize}
+  \item \textbf{EX}: Calcula dirección (\$a0 + 4)
+  \item \textbf{MEM}: Lee dato de memoria en dirección calculada
+  \item \textbf{WB}: Escribe valor en \$t0
+\end{enumerate}
+
+\textbf{Recursos utilizados}:
+\begin{center}
+  \begin{tabular}{l|l}
+    \textbf{Etapa} & \textbf{Componentes} \\
+    \hline
+    IF & Memoria Instrucciones, PC \\
+    ID & Banco de Registros, Extensor Signo \\
+    EX & ALU (suma) \\
+    MEM & Memoria Datos \\
+    WB & Banco de Registros \\
+  \end{tabular}
+\end{center}
+
+\subsection*{14. Justificación algoritmo alternativo (Selection Sort)}
+\begin{itemize}
+  \item \textbf{Menos intercambios}: O($n$) vs O($n^2$)
+  \item \textbf{Eficiencia memoria}: Solo 1 swap/iteración
+  \item \textbf{Adaptación MIPS}: Lógica intuitiva para depuración
+\end{itemize}
+
+\subsection*{15. Análisis de resultados}
+\begin{center}
+  \begin{tabular}{l|c|c|c}
+    \textbf{Algoritmo (versión)} & \textbf{Comparaciones} & \textbf{Intercambios} & \textbf{Ciclos (n=10)} \\
+    \hline
+    Bubble Sort (base) & O($n^2$) & O($n^2$) & 450 \\
+    Bubble Sort (opt.) & O($n^2$) & O($n^2$) & 383 \\
+    Selection Sort (base) & O($n^2$) & O($n$) & 300 \\
+    Selection Sort (opt.) & O($n^2$) & O($n$) & 270 \\
+  \end{tabular}
+\end{center}
+
+\textbf{Conclusión}: 
+\begin{itemize}
+  \item Selection Sort 40\% más rápido que Bubble Sort
+  \item Optimizaciones redujeron ciclos en 15-30\%
+  \item Menos accesos a memoria = mejor rendimiento
+\end{itemize}
+
+\section*{Modalidad de Entrega}
+\begin{enumerate}
+  \item \textbf{Archivos}:
+  \begin{itemize}
+    \item Códigos MIPS: 4 archivos .asm (base y optimizados)
+    \item Informe: \texttt{informe.tex} y \texttt{informe.pdf}
+  \end{itemize}
+  
+  \item \textbf{Defensa presencial}: 15 de julio de 2025
+  \begin{itemize}
+    \item Demostración en MARS de versiones optimizadas
+    \item Análisis de reducción de stalls en pipeline
+  \end{itemize}
+\end{enumerate}
+
+\end{document}
